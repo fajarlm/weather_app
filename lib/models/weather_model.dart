@@ -10,7 +10,7 @@ class Weather {
   final String mainCondition;
   final String description;
   final String iconCode;
-  final int aqi; // Air Quality Index (1-5)
+  final int aqi; //air quality index (1-5, where 1 is good and 5 is very poor)
 
   Weather({
     required this.cityName,
