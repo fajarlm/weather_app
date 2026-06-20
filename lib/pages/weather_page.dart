@@ -911,15 +911,26 @@ class _WeatherPageState extends State<WeatherPage> {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(top: 4.0),
-      child: Text(
-        parts.join(', '),
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.8),
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 0.3,
+      padding: const EdgeInsets.only(top: 8.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.12),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          parts.join(', '),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.85),
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.3,
+          ),
         ),
       ),
     );

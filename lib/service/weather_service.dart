@@ -48,21 +48,48 @@ class WeatherService {
 
   // Mengambil informasi Provinsi dan Negara berdasarkan koordinat
   Future<Map<String, String>> getRegionInfo(double lat, double lon) async {
+    String province = '';
+    String country = '';
+
+    // 1. Coba menggunakan Geocoding Native bawaan perangkat (hanya berjalan di Android/iOS)
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(lat, lon);
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks.first;
-        return {
-          'province': place.administrativeArea ?? '',
-          'country': place.country ?? '',
-        };
+        province = place.administrativeArea ?? '';
+        country = place.country ?? '';
       }
     } catch (e) {
-      debugPrint('Failed to reverse geocode: $e');
+      debugPrint('Failed to native reverse geocode: $e');
     }
+
+    // 2. Jika native gagal atau mengembalikan data kosong, gunakan OpenWeather Geocoding API sebagai fallback (berjalan di semua platform termasuk Windows)
+    if (province.isEmpty || country.isEmpty) {
+      try {
+        final response = await http.get(
+          Uri.parse('https://api.openweathermap.org/geo/1.0/reverse?lat=$lat&lon=$lon&limit=1&appid=$apiKey'),
+        );
+        if (response.statusCode == 200) {
+          final List data = jsonDecode(response.body);
+          if (data.isNotEmpty) {
+            final first = data.first;
+            if (province.isEmpty) {
+              province = first['state'] ?? '';
+            }
+            if (country.isEmpty) {
+              final countryCode = first['country'] ?? '';
+              country = getFullCountryName(countryCode);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to fallback to OpenWeather Geo API: $e');
+      }
+    }
+
     return {
-      'province': '',
-      'country': '',
+      'province': province,
+      'country': country,
     };
   }
 
