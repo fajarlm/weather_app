@@ -252,4 +252,31 @@ class WeatherService {
       desiredAccuracy: LocationAccuracy.medium,
     );
   }
+
+  // Get city suggestions matching the search query
+  Future<List<CitySuggestion>> getCitySuggestions(String query) async {
+    if (query.trim().length < 2) return [];
+    try {
+      final response = await http.get(
+        Uri.parse('https://api.openweathermap.org/geo/1.0/direct?q=${Uri.encodeComponent(query)}&limit=5&appid=$apiKey'),
+      );
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+        return data.map((json) {
+          final suggestion = CitySuggestion.fromJson(json);
+          final translatedCountry = getFullCountryName(suggestion.country);
+          return CitySuggestion(
+            name: suggestion.name,
+            state: suggestion.state,
+            country: translatedCountry,
+            lat: suggestion.lat,
+            lon: suggestion.lon,
+          );
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch city suggestions: $e');
+    }
+    return [];
+  }
 }

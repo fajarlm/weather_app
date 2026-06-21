@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/weather_model.dart';
 import '../service/weather_service.dart';
@@ -21,6 +22,10 @@ class _WeatherPageState extends State<WeatherPage> {
   String? _errorMessage;
   bool _isHourlyForecast = true; // State toggle untuk menampilkan per jam / harian
 
+  List<CitySuggestion> _suggestions = [];
+  bool _isSearchingSuggestions = false;
+  Timer? _debounceTimer;
+
   @override
   void initState() {
     super.initState();
@@ -34,6 +39,7 @@ class _WeatherPageState extends State<WeatherPage> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -119,6 +125,129 @@ class _WeatherPageState extends State<WeatherPage> {
         _isLoading = false;
       });
     }
+  }
+
+  // Triggered ketika input pencarian berubah untuk menampilkan saran kota
+  void _onSearchChanged(String query) {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+
+    if (query.trim().length < 2) {
+      setState(() {
+        _suggestions = [];
+        _isSearchingSuggestions = false;
+      });
+      return;
+    }
+
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () async {
+      setState(() {
+        _isSearchingSuggestions = true;
+      });
+
+      final suggestions = await _weatherService.getCitySuggestions(query);
+
+      setState(() {
+        _suggestions = suggestions;
+        _isSearchingSuggestions = false;
+      });
+    });
+  }
+
+  // Mengambil cuaca berdasarkan koordinat rekomendasi kota yang dipilih
+  Future<void> _fetchWeatherByCoordinates(double lat, double lon, String cityName) async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _suggestions = [];
+    });
+
+    try {
+      final weather = await _weatherService.getWeatherByCoordinates(lat, lon);
+      final forecast = await _weatherService.getForecastByCoordinates(lat, lon);
+
+      setState(() {
+        _weather = weather;
+        _forecast = forecast;
+        _isLoading = false;
+      });
+      _searchController.clear();
+      FocusScope.of(context).unfocus();
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Gagal memuat cuaca untuk $cityName: ${e.toString().replaceFirst('Exception: ', '')}';
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Widget daftar saran pencarian kota (Glassmorphic Dropdown)
+  Widget _buildSuggestionsList() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          constraints: const BoxConstraints(maxHeight: 250),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.55),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.18),
+              width: 1,
+            ),
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            itemCount: _suggestions.length,
+            separatorBuilder: (context, index) => Divider(
+              color: Colors.white.withOpacity(0.12),
+              height: 1,
+            ),
+            itemBuilder: (context, index) {
+              final suggestion = _suggestions[index];
+              final subParts = <String>[];
+              if (suggestion.state.isNotEmpty) subParts.add(suggestion.state);
+              if (suggestion.country.isNotEmpty) subParts.add(suggestion.country);
+              final subtext = subParts.join(', ');
+
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                leading: Icon(
+                  Icons.location_on_outlined,
+                  color: Colors.white.withOpacity(0.7),
+                  size: 20,
+                ),
+                title: Text(
+                  suggestion.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: subtext.isNotEmpty
+                    ? Text(
+                        subtext,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 12,
+                        ),
+                      )
+                    : null,
+                onTap: () {
+                  _fetchWeatherByCoordinates(
+                    suggestion.lat,
+                    suggestion.lon,
+                    suggestion.name,
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   // Dapatkan gradient background dinamis berdasarkan kondisi cuaca & waktu
@@ -419,17 +548,33 @@ class _WeatherPageState extends State<WeatherPage> {
       ),
       child: TextField(
         controller: _searchController,
+        onChanged: _onSearchChanged,
         style: const TextStyle(color: Colors.white, fontSize: 16),
         textInputAction: TextInputAction.search,
         onSubmitted: (value) {
           if (value.trim().isNotEmpty) {
             _fetchWeatherByCity(value.trim());
+            setState(() {
+              _suggestions = [];
+            });
           }
         },
         decoration: InputDecoration(
           hintText: 'Cari nama kota...',
           hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-          prefixIcon: const Icon(Icons.search, color: Colors.white70),
+          prefixIcon: _isSearchingSuggestions
+              ? const Padding(
+                  padding: EdgeInsets.all(14.0),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                    ),
+                  ),
+                )
+              : const Icon(Icons.search, color: Colors.white70),
           suffixIcon: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -438,7 +583,9 @@ class _WeatherPageState extends State<WeatherPage> {
                   icon: const Icon(Icons.clear, color: Colors.white70),
                   onPressed: () {
                     _searchController.clear();
-                    setState(() {});
+                    setState(() {
+                      _suggestions = [];
+                    });
                   },
                 ),
               IconButton(
@@ -446,6 +593,9 @@ class _WeatherPageState extends State<WeatherPage> {
                 onPressed: () {
                   _searchController.clear();
                   _fetchWeatherByCurrentLocation();
+                  setState(() {
+                    _suggestions = [];
+                  });
                 },
               ),
             ],
@@ -1107,22 +1257,42 @@ class _WeatherPageState extends State<WeatherPage> {
         : [const Color(0xFF2193b0), const Color(0xFF6dd5ed)];
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: gradient,
+      body: GestureDetector(
+        onTap: () {
+          // Tutup rekomendasi saat klik di area luar
+          FocusScope.of(context).unfocus();
+          setState(() {
+            _suggestions = [];
+          });
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: gradient,
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildSearchBar(),
-              Expanded(
-                child: _buildBody(),
-              ),
-            ],
+          child: SafeArea(
+            child: Stack(
+              children: [
+                Column(
+                  children: [
+                    _buildSearchBar(),
+                    Expanded(
+                      child: _buildBody(),
+                    ),
+                  ],
+                ),
+                if (_suggestions.isNotEmpty)
+                  Positioned(
+                    top: 68, // Tepat di bawah search bar
+                    left: 16,
+                    right: 16,
+                    child: _buildSuggestionsList(),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
