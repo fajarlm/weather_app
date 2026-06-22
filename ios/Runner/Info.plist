@@ -48,6 +48,14 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Aplikasi ini memerlukan akses lokasi untuk menampilkan cuaca di sekitar Anda.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Aplikasi ini memerlukan akses lokasi untuk menampilkan cuaca di sekitar Anda.</string>
+	<string>Aplikasi ini memerlukan akses lokasi latar belakang untuk memperbarui cuaca secara real-time saat Anda bepergian.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Aplikasi ini memerlukan akses lokasi latar belakang untuk memperbarui cuaca secara real-time saat Anda bepergian.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 </dict>
 </plist>

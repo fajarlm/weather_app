@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/weather_model.dart';
 import '../service/weather_service.dart';
 
@@ -25,16 +27,80 @@ class _WeatherPageState extends State<WeatherPage> {
   List<CitySuggestion> _suggestions = [];
   bool _isSearchingSuggestions = false;
   Timer? _debounceTimer;
+  bool _isServiceRunning = false;
 
+  @pragma('vm:entry-point')
   @override
   void initState() {
     super.initState();
     _fetchWeatherByCurrentLocation();
+    _checkServiceStatus();
 
     // Redraw search suffixes on typing
     _searchController.addListener(() {
       setState(() {});
     });
+  }
+
+  Future<void> _checkServiceStatus() async {
+    final running = await FlutterBackgroundService().isRunning();
+    setState(() {
+      _isServiceRunning = running;
+    });
+  }
+
+  Future<void> _toggleService() async {
+    final service = FlutterBackgroundService();
+    final running = await service.isRunning();
+    
+    if (running) {
+      service.invoke("stopService");
+      setState(() {
+        _isServiceRunning = false;
+      });
+    } else {
+      // Pastikan izin lokasi diberikan dulu
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        permission = await Geolocator.requestPermission();
+      }
+      
+      // Jika hanya "whileInUse", tawarkan untuk "always"
+      if (permission == LocationPermission.whileInUse) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: const Color(0xFF1E3E62),
+              title: const Text("Izin Lokasi Latar Belakang", style: TextStyle(color: Colors.white)),
+              content: const Text(
+                "Untuk memantau cuaca saat Anda berpindah lokasi, mohon pilih opsi 'Izinkan sepanjang waktu' (Allow all the time) pada pengaturan lokasi perangkat Anda.",
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Batal", style: TextStyle(color: Colors.white60)),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await Geolocator.requestPermission();
+                    await service.startService();
+                    _checkServiceStatus();
+                  },
+                  child: const Text("Lanjutkan", style: TextStyle(color: Colors.greenAccent)),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+      }
+
+      await service.startService();
+      _checkServiceStatus();
+    }
   }
 
   @override
@@ -881,6 +947,115 @@ class _WeatherPageState extends State<WeatherPage> {
     );
   }
 
+  Widget _buildNotificationSettingsCard() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.12),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _isServiceRunning
+                            ? Icons.notifications_active_rounded
+                            : Icons.notifications_off_rounded,
+                        color: _isServiceRunning ? Colors.greenAccent.shade400 : Colors.white60,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        "Notifikasi Latar Belakang",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Switch(
+                    value: _isServiceRunning,
+                    onChanged: (val) => _toggleService(),
+                    activeColor: Colors.greenAccent.shade400,
+                    activeTrackColor: Colors.greenAccent.shade400.withOpacity(0.3),
+                    inactiveThumbColor: Colors.white60,
+                    inactiveTrackColor: Colors.white.withOpacity(0.1),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Memantau cuaca secara otomatis pada pagi, siang, malam, dan saat Anda bepergian jauh.",
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.65),
+                  fontSize: 12,
+                  height: 1.3,
+                ),
+              ),
+              FutureBuilder<LocationPermission>(
+                future: Geolocator.checkPermission(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData &&
+                      _isServiceRunning &&
+                      snapshot.data != LocationPermission.always) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 12.0),
+                      child: InkWell(
+                        onTap: () async {
+                          await Geolocator.requestPermission();
+                          _checkServiceStatus();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade900.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.amber.shade600, width: 1),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded, color: Colors.amber.shade300, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "Butuh izin lokasi 'Izinkan sepanjang waktu' agar pemantauan latar belakang berjalan optimal.",
+                                  style: TextStyle(
+                                    color: Colors.amber.shade100,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // Tampilan Toggle Tab Cuaca (Per Jam vs Harian) - BARU
   Widget _buildForecastToggle() {
     return Row(
@@ -1239,6 +1414,9 @@ class _WeatherPageState extends State<WeatherPage> {
               const SizedBox(height: 20),
               // Card Rekomendasi / Tips Cuaca
               _buildTipsCard(),
+              const SizedBox(height: 20),
+              // Card Pengaturan Notifikasi Latar Belakang (BARU)
+              _buildNotificationSettingsCard(),
               const SizedBox(height: 35),
               // Card Forecast Toggle & List
               _buildForecastSection(),
