@@ -336,7 +336,7 @@ class NotificationService {
         iOS: iOSDetails,
       );
 
-      final int id = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      const int id = 999;
       await notifPlugin.show(
         id: id,
         title: title,
