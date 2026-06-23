@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'weather_service.dart';
 import '../models/weather_model.dart';
 
+@pragma('vm:entry-point')
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
@@ -148,6 +149,9 @@ class NotificationService {
           .listen((Position position) async {
         debugPrint("Location change detected in BG: ${position.latitude}, ${position.longitude}");
         
+        // Perbarui notifikasi foreground dengan cuaca terbaru
+        await _updateForegroundNotification(weatherService, position, backgroundNotifPlugin);
+
         // Cek perpindahan lokasi yang signifikan
         await _handleLocationChange(position, weatherService, backgroundNotifPlugin);
       });
@@ -164,6 +168,7 @@ class NotificationService {
             timeLimit: Duration(seconds: 15),
           ),
         );
+        await _updateForegroundNotification(weatherService, position, backgroundNotifPlugin);
         await _checkScheduledTime(position, weatherService, backgroundNotifPlugin);
       } catch (e) {
         debugPrint("Error checking scheduled weather: $e");
@@ -178,6 +183,7 @@ class NotificationService {
           timeLimit: Duration(seconds: 10),
         ),
       );
+      await _updateForegroundNotification(weatherService, position, backgroundNotifPlugin);
       await _checkScheduledTime(position, weatherService, backgroundNotifPlugin);
     } catch (_) {}
   }
@@ -390,6 +396,57 @@ class NotificationService {
       case 4: return 'Buruk';
       case 5: return 'Sangat Buruk';
       default: return 'Sedang';
+    }
+  }
+
+  /// Memperbarui notifikasi foreground service dengan info cuaca terbaru
+  static Future<void> _updateForegroundNotification(
+    WeatherService weatherService,
+    Position position,
+    FlutterLocalNotificationsPlugin notifPlugin,
+  ) async {
+    try {
+      final Weather weather = await weatherService.getWeatherByCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      String condIndo = _getIndonesianCondition(weather.mainCondition);
+      String emoji = _getWeatherEmoji(weather.mainCondition);
+      String aqiLabel = _getAqiLabel(weather.aqi);
+
+      String locName = weather.cityName;
+      if (weather.province.isNotEmpty) {
+        locName += ", ${weather.province}";
+      }
+
+      final String content =
+          "📍 $locName • $emoji $condIndo • 🌡️ ${weather.temperature.toStringAsFixed(1)}°C • 🍃 AQI: $aqiLabel";
+
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        _serviceChannelId,
+        'Layanan Latar Belakang Cuaca',
+        channelDescription: 'Menjaga pemantauan cuaca dan lokasi tetap berjalan di latar belakang.',
+        importance: Importance.low,
+        priority: Priority.low,
+        ongoing: true,
+        showWhen: true,
+        onlyAlertOnce: true,
+      );
+
+      const NotificationDetails details = NotificationDetails(
+        android: androidDetails,
+      );
+
+      await notifPlugin.show(
+        id: 888, // ID yang sama dengan foregroundServiceNotificationId
+        title: 'Layanan Cuaca Aktif',
+        body: content,
+        notificationDetails: details,
+      );
+      debugPrint("Foreground notification updated: $content");
+    } catch (e) {
+      debugPrint("Failed to update foreground notification: $e");
     }
   }
 }
