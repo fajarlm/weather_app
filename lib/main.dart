@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'pages/weather_page.dart';
+import 'pages/splash_page.dart';
 import 'service/notification_service.dart';
 
 void main() async {
@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: WeatherPage(),
+      home: SplashPage(),
     );
   }
 }
