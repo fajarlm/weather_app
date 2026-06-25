@@ -90,8 +90,13 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                 height: 300,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFF5A623).withOpacity(0.08),
-                  blurSigma: 80,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFF5A623).withOpacity(0.08),
+                      blurRadius: 80,
+                      spreadRadius: 40,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -103,8 +108,13 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                 height: 250,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.tealAccent.withOpacity(0.05),
-                  blurSigma: 60,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.tealAccent.withOpacity(0.05),
+                      blurRadius: 60,
+                      spreadRadius: 30,
+                    ),
+                  ],
                 ),
               ),
             ),
